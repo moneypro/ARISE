@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import weka.classifiers.bayes.NaiveBayes;
 
 import static util.Constants.localServerPortNumber;
 

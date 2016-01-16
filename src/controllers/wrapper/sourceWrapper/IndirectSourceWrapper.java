@@ -26,7 +26,7 @@ public class IndirectSourceWrapper extends GeneralSourceWrapper {
         Map<String, String> params = new HashMap<String, String>();
         for (Object k : searchConditions.keySet()) {
             String key = (String)k;
-            params.put(key, searchConditions.getString(key));
+            params.put(key, searchConditions.get(key).toString());
         }
         String url;
         try {

@@ -13,5 +13,6 @@ public class Constants {
             "in", "on", "onto", "into", "based", "with", "within", "journal", ",", ".", ":", ";", "-", "", " ", "  ",
             "   ", "    ", "\t", "\t\t", "\t\t\t", "la", "de", "da", "no", "et", "univ", "university", "college",
             "department", "dept", "school"};
+    public static final String kwTableName = "KWS";
 
 }

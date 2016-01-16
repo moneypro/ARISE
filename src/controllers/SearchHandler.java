@@ -1,19 +1,19 @@
 package controllers;
 
+import controllers.schema.Field;
 import controllers.wrapper.GeneralWrapper;
 import controllers.wrapper.aspectWrapper.GeneralAspectWrapper;
 import controllers.wrapper.aspectWrapper.indirectWrappers.LocalAspectWrapper;
+import database.EmbeddedDB;
 import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
+import util.Constants;
 import util.MyHTTP;
 
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import static util.Constants.localServerPortNumber;
 
@@ -24,6 +24,7 @@ public class SearchHandler{
     private boolean isValid;
     private LocalSearchServer server;
     private JSONObject lastQuery;
+    private EmbeddedDB db;
 
     /*
     * Constructor of a search handler:
@@ -31,6 +32,9 @@ public class SearchHandler{
     *   2.  Start local background service.
     * */
     public SearchHandler() {
+        db = new EmbeddedDB("dbbackup");
+        db.createKWTable();
+        if (!db.isValid()) db = new EmbeddedDB();
         this.reset();
         server = new LocalSearchServer();
         server.start();
@@ -52,7 +56,7 @@ public class SearchHandler{
                     if (aspect.getName().startsWith(".") || !(aspect.isDirectory())) {
                         continue;
                     }
-                    GeneralAspectWrapper aWrapper = new LocalAspectWrapper(aspect.getName());
+                    GeneralAspectWrapper aWrapper = new LocalAspectWrapper(aspect.getName(), db);
                     if (aWrapper.isValid()) {
                         this.registeredAspects.add(aWrapper);
                         this.activation.put(aspect.getName(), true);
@@ -74,10 +78,12 @@ public class SearchHandler{
     * */
     public void stop() {
         server.stop();
+        db.backUpDB("dbbackup");
         //  Possibly cleaning up
     }
 
     public JSONObject search(JSONObject searchConditions) {
+        searchConditions.put("kws", db.getKWs(searchConditions));
         JSONObject results = new JSONObject();
         for (GeneralAspectWrapper registeredAspect : this.registeredAspects) {
             if (registeredAspect.isActivated()) {
@@ -91,6 +97,157 @@ public class SearchHandler{
         return results;
     }
 
+    public JSONObject redoSearch(JSONObject searchConditions) {
+        JSONObject kws = searchConditions.getJSONObject("kws");
+        Iterator<String> kwIter = kws.keys();
+        while (kwIter.hasNext()) {
+            String kw = kwIter.next();
+            db.insertAllRecords(kw, searchConditions, kws.getJSONObject(kw));
+        }
+        Map<String, Integer> wordImportance = new HashMap<String, Integer>();
+        for (GeneralAspectWrapper aspect : registeredAspects) {
+            JSONObject aspectFeedBack = kws.getJSONObject(aspect.name);
+            if (aspectFeedBack.containsKey("positive")) {
+                JSONArray arr = aspectFeedBack.getJSONArray("positive");
+                for (Object r : arr) {
+                    JSONObject rec = JSONObject.fromObject(r);
+                    for (Field field : aspect.getSchema().fields) {
+                        if ((field.dataType.equalsIgnoreCase("Text") ||
+                                field.dataType.equalsIgnoreCase("Location")) &&
+                                rec.containsKey(field.fieldName)) {
+                            if (rec.containsKey(field.fieldName)) {
+                                String val = rec.getString(field.fieldName);
+                                for (String word : val.split("\\W+?")) {
+                                    boolean ignored = false;
+                                    for (String ignore : Constants.kwIgnore) {
+                                        if (word.equalsIgnoreCase(ignore)) ignored = true;
+                                    }
+                                    if (ignored) continue;
+                                    wordImportance.put(
+                                            word,
+                                            wordImportance.getOrDefault(word, 0) + 1
+                                    );
+
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if (aspectFeedBack.containsKey("negative")) {
+                JSONArray arr = aspectFeedBack.getJSONArray("negative");
+                for (Object r : arr) {
+                    JSONObject rec = JSONObject.fromObject(r);
+                    for (Field field : aspect.getSchema().fields) {
+                        if (field.dataType.equalsIgnoreCase("Text") ||
+                                field.dataType.equalsIgnoreCase("Location")) {
+                            if (rec.containsKey(field.fieldName)) {
+                                String val = rec.getString(field.fieldName);
+                                for (String word : val.split("\\W+?")) {
+                                    boolean ignored = false;
+                                    for (String ignore : Constants.kwIgnore) {
+                                        if (word.equalsIgnoreCase(ignore)) ignored = true;
+                                    }
+                                    if (ignored) continue;
+                                    wordImportance.put(
+                                            word,
+                                            wordImportance.getOrDefault(word, 0) - 1
+                                    );
+
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Comparator<Map.Entry<String, Integer>> cmp = new Comparator<Map.Entry<String, Integer>>() {
+            @Override
+            public int compare(Map.Entry<String, Integer> e1, Map.Entry<String, Integer> e2) {
+                return e1.getValue() - e2.getValue();
+            }
+        };
+        Set<Map.Entry<String, Integer>> entries = wordImportance.entrySet();
+        String[][] ret = new String[2][5];
+        for (int i = 0; i < 5; i++) {
+            try {
+                Map.Entry<String, Integer> max = Collections.max(entries, cmp);
+                if (max.getValue() <= 0) {
+                    for (int j = i; j < 5; j++) {
+                        ret[0][j] = null;
+                    }
+                    break;
+                }
+                ret[0][i] = max.getKey();
+                entries.remove(max);
+            } catch (NoSuchElementException e) {
+                for (int j = i; j < 5; j++) {
+                    ret[0][j] = null;
+                }
+                break;
+            }
+        }
+        for (int i = 0; i < 5; i++) {
+            try {
+                Map.Entry<String, Integer> min = Collections.min(entries, cmp);
+                if (min.getValue() >= 0) {
+                    for (int j = i; j < 5; j++) {
+                        ret[1][j] = null;
+                    }
+                    break;
+                }
+                ret[1][i] = min.getKey();
+                entries.remove(min);
+            } catch (NoSuchElementException e) {
+                for (int j = i; j < 5; j++) {
+                    ret[1][j] = null;
+                }
+                break;
+            }
+        }
+        JSONArray positiveKWs, negativeKWs;
+        if (lastQuery.containsKey("kws")) {
+            JSONObject kwObj = lastQuery.getJSONObject("kws");
+            if (kwObj.containsKey("positive")) positiveKWs = kwObj.getJSONArray("positive");
+            else positiveKWs = new JSONArray();
+            if (kwObj.containsKey("negative")) negativeKWs = kwObj.getJSONArray("negative");
+            else negativeKWs = new JSONArray();
+        } else {
+            positiveKWs = new JSONArray();
+            negativeKWs = new JSONArray();
+        }
+        for (int i = 0; i < 5; i++) {
+            String kw = ret[0][i];
+            if (kw == null) break;
+            if (negativeKWs.contains(kw)) {
+                negativeKWs.remove(kw);
+                db.deleteKW(searchConditions, kw);
+            }
+            else if (!positiveKWs.contains(kw)) {
+                positiveKWs.add(kw);
+                db.insertKW(searchConditions, kw, true);
+            }
+        }
+        for (int i = 0; i < 5; i++) {
+            String kw = ret[1][i];
+            if (kw == null) break;
+            if (positiveKWs.contains(kw)) {
+                positiveKWs.remove(kw);
+                db.deleteKW(searchConditions, kw);
+            }
+            else if (!negativeKWs.contains(kw)) {
+                negativeKWs.add(kw);
+                db.insertKW(searchConditions, kw, false);
+            }
+        }
+        JSONObject kwObj = new JSONObject();
+        kwObj.put("positive", positiveKWs);
+        kwObj.put("negative", negativeKWs);
+        searchConditions.replace("kws", kwObj);
+        return search(searchConditions);
+    }
+
+    @Deprecated
     public JSONObject restartSearch(JSONObject searchConditions) {
         JSONArray positiveKWs, negativeKWs;
         if (lastQuery.containsKey("kws")) {
@@ -199,7 +356,7 @@ public class SearchHandler{
                     writer.write(field.getString("name") + "\t" + field.getString("isPK") + "\t" + field.getString("syntax"));
                 }
                 writer.close();
-                LocalAspectWrapper awrapper = new LocalAspectWrapper(name);
+                LocalAspectWrapper awrapper = new LocalAspectWrapper(name, db);
                 if (awrapper.isValid()) {
                     registeredAspects.add(awrapper);
                 }

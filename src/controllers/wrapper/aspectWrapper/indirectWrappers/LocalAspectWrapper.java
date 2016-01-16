@@ -1,9 +1,11 @@
 package controllers.wrapper.aspectWrapper.indirectWrappers;
 
+import controllers.relevanceFiltering.RelevanceFilter;
 import controllers.schema.SchemaReader;
 import controllers.wrapper.aspectWrapper.GeneralAspectWrapper;
 import controllers.wrapper.sourceWrapper.GeneralSourceWrapper;
 import controllers.wrapper.sourceWrapper.IndirectSourceWrapper;
+import database.EmbeddedDB;
 import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
 
@@ -20,9 +22,12 @@ import static controllers.intraAspectMatchers.InclusionCounter.countInclusion;
 public class LocalAspectWrapper extends GeneralAspectWrapper {
 
     private Set<GeneralSourceWrapper> registeredSources;
+    private RelevanceFilter filter;
+    private EmbeddedDB db;
 
-    public LocalAspectWrapper(String aspectName) {
+    public LocalAspectWrapper(String aspectName, EmbeddedDB db) {
         super(aspectName);
+        this.db = db;
         String aspectBasePath = basePath + "/" + aspectName;
         SchemaReader sReader = new SchemaReader(aspectBasePath + "/schema.tsv");
         if (!sReader.isValid()) {
@@ -72,6 +77,9 @@ public class LocalAspectWrapper extends GeneralAspectWrapper {
                 this.isValid = false;
             }
         }
+        //  Add aspect table in DB if it does not exist
+        db.createEmptyRecordTable(name);
+        filter = new RelevanceFilter(name, schema, db);
     }
 
     public void setActivation(String source, boolean newIsActive) {
@@ -105,7 +113,18 @@ public class LocalAspectWrapper extends GeneralAspectWrapper {
             }
         }
         JSONArray merged = countInclusion(this.schema, resultFromEachSource);
-        return group(merged, schema);
+        JSONArray relevant = new JSONArray();
+        JSONArray irrelevant = new JSONArray();
+        filter.train(searchConditions);
+        for (Object o : merged) {
+            JSONObject rec = JSONObject.fromObject(o);
+            if (filter.predict(rec)) relevant.add(rec);
+            else irrelevant.add(rec);
+        }
+        JSONObject ret = new JSONObject();
+        ret.put("irrelevant", irrelevant);
+        ret.put("relevant", group(relevant, schema));
+        return ret;
     }
 
     @Override
@@ -130,7 +149,18 @@ public class LocalAspectWrapper extends GeneralAspectWrapper {
             }
         }
         JSONArray merged = countInclusion(this.schema, resultFromEachSource);
-        return group(merged, schema);
+        JSONArray relevant = new JSONArray();
+        JSONArray irrelevant = new JSONArray();
+        filter.train(searchConditions);
+        for (Object o : merged) {
+            JSONObject rec = JSONObject.fromObject(o);
+            if (filter.predict(rec)) relevant.add(rec);
+            else irrelevant.add(rec);
+        }
+        JSONObject ret = new JSONObject();
+        ret.put("irrelevant", irrelevant);
+        ret.put("relevant", group(relevant, schema));
+        return ret;
     }
 
     @Override
@@ -140,4 +170,5 @@ public class LocalAspectWrapper extends GeneralAspectWrapper {
             registeredSource.print();
         }
     }
+
 }

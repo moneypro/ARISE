@@ -44,6 +44,7 @@ public class ResultPanel extends JPanel{
         for (Object k : results.keySet()) {
             String cardName = (String)k;
             ResultCard card = new ResultCard(results.getJSONObject(cardName));
+            card.setName(cardName);
             this.cards.add(card);
             this.infoArea.add(card, cardName);
             final JRadioButton button = new JRadioButton(cardName);
@@ -62,6 +63,15 @@ public class ResultPanel extends JPanel{
         layout.first(this.infoArea);
     }
 
+    public JSONObject getFeedBack() {
+        JSONObject ret = new JSONObject();
+        for (ResultCard card : cards) {
+            ret.put(card.getName(), card.getFeedBack());
+        }
+        return ret;
+    }
+
+    @Deprecated
     public String[][] getNewKeywords() {
         Map<String, Double> total = new HashMap<String, Double>();
         for (ResultCard card : cards) {

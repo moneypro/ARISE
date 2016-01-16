@@ -120,8 +120,8 @@ public class ResultCard extends JPanel{
 
         DefaultMutableTreeNode top = new DefaultMutableTreeNode("Keywords:");
 
-
-        for (Object e : results.entrySet()) {
+        JSONObject relevant = results.getJSONObject("relevant");
+        for (Object e : relevant.entrySet()) {
             Map.Entry<String, JSONArray> ent = (Map.Entry)e;
             String[] kwAndUniqueKWs = ent.getKey().split(Constants.uniquekwDelimiter);
             String[] kws = kwAndUniqueKWs[0].split(Constants.kwDelimiter);
@@ -149,7 +149,7 @@ public class ResultCard extends JPanel{
                 // Graph Analyzing Info Extraction
                 // -------------------------------------------------------------
                 String key = current.getString("Included by");
-                if(GlobalGraphInfo.sourceToCount.containsKey(key) == true){
+                if(GlobalGraphInfo.sourceToCount.containsKey(key)){
                     int currentCount = GlobalGraphInfo.sourceToCount.get(key);
                     GlobalGraphInfo.sourceToCount.put(key, currentCount + 1);
                 }
@@ -163,12 +163,37 @@ public class ResultCard extends JPanel{
             }
         }
 
+        JSONArray irrelevant = results.getJSONArray("irrelevant");
+        DefaultMutableTreeNode irrelevantGroup = new DefaultMutableTreeNode("Possibly Irrelevant:");
+        for (int i = 0; i < irrelevant.size(); i++) {
+            JSONObject rec = irrelevant.getJSONObject(i);
+            RecordNode node = new RecordNode(rec);
+            irrelevantGroup.add(node);
+
+            // Graph Analyzing Info Extraction
+            // -------------------------------------------------------------
+            String key = rec.getString("Included by");
+            if(GlobalGraphInfo.sourceToCount.containsKey(key)){
+                int currentCount = GlobalGraphInfo.sourceToCount.get(key);
+                GlobalGraphInfo.sourceToCount.put(key, currentCount + 1);
+            }
+            else{
+                if(!key.contains(",")){
+                    GlobalGraphInfo.sourceToCount.put(key, 0);
+                    GlobalGraphInfo.keys.add(key);
+                }
+            }
+            // --------------------------------------------------------------
+        }
+        top.add(irrelevantGroup);
+
         this.tree = new JTree(top);
         MouseListener ml = new MouseAdapter() {
 
             public void mouseClicked(MouseEvent e) {
                 TreePath selPath = tree.getPathForLocation(e.getX(), e.getY());
-                if (selPath == null || !tree.getModel().isLeaf(selPath.getLastPathComponent())) return;
+                if (selPath == null || !tree.getModel().isLeaf(selPath.getLastPathComponent()) ||
+                        !(selPath.getLastPathComponent() instanceof RecordNode)) return;
                 if (e.getClickCount() >= 2) {
                     int choice = JOptionPane.showConfirmDialog(null, "Is this record relevant?",
                             "Relevance Feedback", JOptionPane.YES_NO_OPTION);
@@ -201,7 +226,7 @@ public class ResultCard extends JPanel{
                         .getTreeCellRendererComponent ( tree, value, sel, expanded, leaf, row,
                                 hasFocus );
                 label.setBorder ( border );
-                if (leaf) {
+                if (leaf && value instanceof RecordNode) {
                     try {
                         RecordNode node = (RecordNode)value;
                         if (node.relevance == 1) {
@@ -211,7 +236,10 @@ public class ResultCard extends JPanel{
                         } else {
                             setIcon(loadIcon("unknown.png"));
                         }
-                    } catch (Exception e) {}
+                    } catch (Exception e) {
+                        System.out.println("Error setting icon for tree node.");
+                        e.printStackTrace();
+                    }
 
                 }
                 return label;
@@ -226,6 +254,36 @@ public class ResultCard extends JPanel{
         this.scrollPane.setVisible(true);
     }
 
+    public JSONObject getFeedBack() {
+        JSONArray pos = new JSONArray();
+        JSONArray neg = new JSONArray();
+        TreeModel model = this.tree.getModel();
+        Object cur = model.getRoot();
+        Stack<Object> toVisit = new Stack<Object>();
+        toVisit.push(cur);
+        while (!toVisit.empty()) {
+            cur = toVisit.pop();
+            int childrenCount = model.getChildCount(cur);
+            for (int i = 0; i < childrenCount; i++) {
+                toVisit.add(model.getChild(cur, i));
+            }
+            if (model.isLeaf(cur) && cur instanceof RecordNode) {
+                RecordNode node = (RecordNode)cur;
+                if (node.relevance == 1) {
+                    pos.add(node.data);
+                }
+                else if (node.relevance == -1) {
+                    neg.add(node.data);
+                }
+            }
+        }
+        JSONObject ret = new JSONObject();
+        ret.put("positive", pos);
+        ret.put("negative", neg);
+        return ret;
+    }
+
+    @Deprecated
     public Map<String, Double> getRelevanceVector() {
         Map<String, Double> ret = new HashMap<String, Double>();
         TreeModel model = this.tree.getModel();

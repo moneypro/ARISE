@@ -143,7 +143,7 @@ public class SearchPanel extends JPanel {
     }
 
     public void restartSearch() {
-        this.parentWindow.restartSearch(this.getInputName(), this.getInputAffiliation());
+        this.parentWindow.redoSearch(this.getInputName(), this.getInputAffiliation());
     }
 
     public void promptAndFocus() {
