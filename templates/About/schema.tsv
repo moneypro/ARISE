@@ -1,0 +1,11 @@
+Field Name	Is Primary Key	Syntax
+Name	Yes	Text
+Born	No	Text
+Education	No	Text
+Homepage	No	Text
+LinkedIn	No	Text
+ResearchGate No Text
+About	No	Text
+Academic Links No Text
+Related People	No	Text
+Field	No	Text

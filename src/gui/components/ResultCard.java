@@ -128,17 +128,23 @@ public class ResultCard extends JPanel{
             JSONArray group = ent.getValue();
             if (group.size() == 0) continue;
             String groupName = "<html><b>Frequent words</b>:";
-            for (int i = 0; i < kws.length; i++) {
-                groupName += kws[i] + ", ";
+            if(ent.getKey().equalsIgnoreCase("About the Researcher")){
+
+                groupName = "<html><b>About the Researcher</b></html>";
             }
-            groupName = groupName.substring(0, groupName.length()-2);
-            groupName += ";  <b>Identifying words</b>:";
-            kws = kwAndUniqueKWs[1].split(Constants.kwDelimiter);
-            for (int i = 0; i < kws.length; i++) {
-                groupName += kws[i] + ", ";
+            else {
+                for (int i = 0; i < kws.length; i++) {
+                    groupName += kws[i] + ", ";
+                }
+                groupName = groupName.substring(0, groupName.length() - 2);
+                groupName += ";  <b>Identifying words</b>:";
+                kws = kwAndUniqueKWs[1].split(Constants.kwDelimiter);
+                for (int i = 0; i < kws.length; i++) {
+                    groupName += kws[i] + ", ";
+                }
+                groupName = groupName.substring(0, groupName.length() - 2);
+                groupName += "</html>";
             }
-            groupName = groupName.substring(0, groupName.length()-2);
-            groupName += "</html>";
             DefaultMutableTreeNode currentGroupNode = new DefaultMutableTreeNode(groupName);
             top.add(currentGroupNode);
             for (int j = 0; j < group.size(); j++) {
@@ -157,6 +163,18 @@ public class ResultCard extends JPanel{
                     if(!key.contains(",")){
                         GlobalGraphInfo.sourceToCount.put(key, 0);
                         GlobalGraphInfo.keys.add(key);
+                    }
+                    else{
+                        key = key.split("(,)")[0];
+
+                        if(GlobalGraphInfo.sourceToCount.containsKey(key) == true){
+                            int currentCount = GlobalGraphInfo.sourceToCount.get(key);
+                            GlobalGraphInfo.sourceToCount.put(key, currentCount + 1);
+                        }
+                        else{
+                            GlobalGraphInfo.sourceToCount.put(key, 0);
+                            GlobalGraphInfo.keys.add(key);
+                        }
                     }
                 }
                 // --------------------------------------------------------------
