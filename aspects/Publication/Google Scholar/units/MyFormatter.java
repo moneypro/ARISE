@@ -13,6 +13,12 @@ public class MyFormatter implements Formatter
 
     @Override
     public JSON convertToJSON(Object rawResponse) {
+
+        return (JSON)rawResponse;
+    }
+
+    public JSON converToJSONForScholarPy(Object rawResponse){
+
         String res = (String) rawResponse;
         String[] records = res.split("\n\n");
         JSONArray ret = new JSONArray();
@@ -28,7 +34,5 @@ public class MyFormatter implements Formatter
         }
         return ret;
     }
-
-
 
 }

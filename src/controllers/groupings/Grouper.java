@@ -16,6 +16,17 @@ public class Grouper {
         int numRecords = records.size();
         ArrayList<Field> fields = schema.getAllFields();
 
+        if(fields.get(0).fieldName.toString().equalsIgnoreCase("name")){
+
+            JSONObject ret = new JSONObject();
+
+
+            ret.put("About the Researcher", records);
+
+
+            return ret;
+        }
+
         //  Computes keywords
         TreeMap keywords = new TreeMap<String, ArrayList<String>>();
         for (Field field : fields) {
