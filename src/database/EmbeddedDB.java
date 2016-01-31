@@ -24,8 +24,8 @@ public class EmbeddedDB {
             e.printStackTrace();
             conn = null;
             isValid = false;
-        } catch (ClassNotFoundException e) {
-            e.printStackTrace();
+        } catch (ClassNotFoundException e1) {
+            e1.printStackTrace();
             conn = null;
             isValid = false;
         }
