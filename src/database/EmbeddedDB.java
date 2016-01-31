@@ -6,6 +6,7 @@ import util.Constants;
 
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.concurrent.Exchanger;
 
 public class EmbeddedDB {
 
@@ -39,8 +40,15 @@ public class EmbeddedDB {
             isValid = true;
         } catch (SQLException e) {
             System.out.println("Failed to restore database. Creating a new one.");
-            conn = null;
-            isValid = false;
+            try {
+                conn = DriverManager.getConnection("jdbc:derby:arise;create=true");
+                isValid = true;
+            }
+            catch (Exception e1) {
+                e.printStackTrace();
+                conn = null;
+                isValid = false;
+            }
         } catch (ClassNotFoundException e) {
             e.printStackTrace();
             conn = null;
