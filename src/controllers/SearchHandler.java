@@ -25,6 +25,7 @@ public class SearchHandler{
     private LocalSearchServer server;
     private JSONObject lastQuery;
     private EmbeddedDB db;
+    private JSONObject searchRes = new JSONObject();
 
     /*
     * Constructor of a search handler:
@@ -81,20 +82,60 @@ public class SearchHandler{
         db.backUpDB("dbbackup");
         //  Possibly cleaning up
     }
-
-    public JSONObject search(JSONObject searchConditions) {
-        searchConditions.put("kws", db.getKWs(searchConditions));
-        JSONObject results = new JSONObject();
-        for (GeneralAspectWrapper registeredAspect : this.registeredAspects) {
+    class searchAspect implements Runnable{
+        public Thread t;
+        private GeneralAspectWrapper registeredAspect;
+        private JSONObject searchConditions;
+        public searchAspect(GeneralAspectWrapper regAsp,JSONObject cond){
+            registeredAspect= regAsp;
+            searchConditions= cond;
+        }
+        public void start(){
+            if (t == null)
+            {
+                System.out.println("Is T null??");
+                t = new Thread (this,"th");
+                t.start ();
+            }
+        }
+        public void run(){
             if (registeredAspect.isActivated()) {
                 JSONObject temp = new JSONObject();
                 temp.put("schema", registeredAspect.getSchema().toJSONArray());
                 temp.put("results", registeredAspect.timedGetResultAsJSON(searchConditions));
-                results.put(registeredAspect.name, temp);
+                searchRes.put(registeredAspect.name, temp);
             }
         }
+
+        public void join(){
+            try {
+//                System.out.println("Waiting for threads to finish.");
+                t.join();
+            } catch (InterruptedException e) {
+                System.out.println("Main thread Interrupted");
+            }
+        }
+    }
+    public JSONObject search(JSONObject searchConditions) {
+        searchConditions.put("kws", db.getKWs(searchConditions));
+//        JSONObject results = new JSONObject();
+        Vector<searchAspect> workers = new Vector<searchAspect>(10);
+        for (GeneralAspectWrapper registeredAspect : this.registeredAspects) {
+//            System.out.print ("F");
+//            if (registeredAspect.isActivated()) {
+//                JSONObject temp = new JSONObject();
+//                temp.put("schema", registeredAspect.getSchema().toJSONArray());
+//                temp.put("results", registeredAspect.timedGetResultAsJSON(searchConditions));
+//                results.put(registeredAspect.name, temp);
+//            }
+                workers.addElement(new searchAspect(registeredAspect, searchConditions));
+        }
+        for (searchAspect sa : workers)
+            sa.start();
+        for (searchAspect sa : workers)
+            sa.join();
         this.lastQuery = searchConditions;
-        return results;
+        return searchRes;
     }
 
     public JSONObject redoSearch(JSONObject searchConditions) {
